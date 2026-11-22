@@ -1,0 +1,42 @@
+=== 1. SERVIS DURUMLARI ===
+NAME                        IMAGE                COMMAND                  SERVICE         CREATED         STATUS                     PORTS
+yemekhane-frontend-1        yemekhane-frontend   "httpd-foreground -D…"   frontend        3 minutes ago   Up 3 minutes (healthy)     0.0.0.0:8080->80/tcp, :::8080->80/tcp
+yemekhane-mysql-primary-1   mysql:8.4            "docker-entrypoint.s…"   mysql-primary   3 minutes ago   Up 3 minutes (healthy)     33060/tcp, 0.0.0.0:3307->3306/tcp, :::3307->3306/tcp
+yemekhane-mysql-replica-1   mysql:8.4            "docker-entrypoint.s…"   mysql-replica   3 minutes ago   Up 3 minutes (healthy)     33060/tcp, 0.0.0.0:3308->3306/tcp, :::3308->3306/tcp
+yemekhane-redis-1           redis:7.4-alpine     "docker-entrypoint.s…"   redis           3 minutes ago   Up 3 minutes (healthy)     0.0.0.0:6379->6379/tcp, :::6379->6379/tcp
+yemekhane-replica-setup-1   mysql:8.4            "bash /replica-setup…"   replica-setup   3 minutes ago   Exited (0) 2 minutes ago   
+
+=== 2. REPLIKASYON DURUMU ===
+mysql: [Warning] Using a password on the command line interface can be insecure.
+           Replica_IO_Running: Yes
+          Replica_SQL_Running: Yes
+        Seconds_Behind_Source: 0
+    Replica_SQL_Running_State: Replica has read all relay log; waiting for more updates
+            Executed_Gtid_Set: 6ad6faa1-e6c8-11f1-86cb-d2aaea71469c:1-42
+
+=== 3. KAYNAKTA BAKIYE YUKLEME VE REPLIKADA DOGRULAMA ===
+mysql: [Warning] Using a password on the command line interface can be insecure.
+hareket_id	bakiye
+455	455.00
+mysql: [Warning] Using a password on the command line interface can be insecure.
+id	bakiye
+7	455.00
+
+=== 4. REPLIKAYA YAZMA DENEMESI (READ-ONLY HATASI BEKLENIR) ===
+mysql: [Warning] Using a password on the command line interface can be insecure.
+ERROR 1290 (HY000) at line 1: The MySQL server is running with the --super-read-only option so it cannot execute this statement
+
+=== 5. REPLIKA DURDUR-BASLAT VE ARADAKI DEGISIKLIGI YAKALAMA ===
+ Container yemekhane-mysql-replica-1  Stopping
+ Container yemekhane-mysql-replica-1  Stopped
+mysql: [Warning] Using a password on the command line interface can be insecure.
+hareket_id	bakiye
+456	655.00
+ Container yemekhane-mysql-replica-1  Starting
+ Container yemekhane-mysql-replica-1  Started
+mysql: [Warning] Using a password on the command line interface can be insecure.
+id	bakiye
+7	655.00
+
+=== 6. REDIS PING ===
+PONG
