@@ -8,8 +8,10 @@ const bakiyeRoutes = require('./bakiyeRoutes');
 const degerlendirmeRoutes = require('./degerlendirmeRoutes');
 const adminRoutes = require('./adminRoutes');
 const turnikeRoutes = require('./turnikeRoutes');
+const profilRoutes = require('./profilRoutes');
 
 const menuController = require('../controllers/menuController');
+const profilController = require('../controllers/profilController');
 
 // Sağlık ve kök kontrol endpoint'i
 router.get('/', (req, res) => {
@@ -20,6 +22,8 @@ router.get('/', (req, res) => {
 router.use('/auth', authRoutes);
 router.get('/yemekhaneler', menuController.getYemekhaneler);
 router.get('/ogunler', menuController.getOgunler);
+router.get('/alerjenler', profilController.getAlerjenler);
+router.use('/profil', profilRoutes);
 router.use('/menuler', menuRoutes);
 router.use('/rezervasyonlar', rezervasyonRoutes);
 router.use('/bakiye', bakiyeRoutes);

@@ -55,6 +55,9 @@
       <button id="sekme-degerlendirme" class="nav-sekme" data-ekran="degerlendirme" style="display: none;">
         <span>⭐</span> Değerlendirme
       </button>
+      <button id="sekme-profil" class="nav-sekme" data-ekran="profil" style="display: none;">
+        <span>👤</span> Profil & Alerjenler
+      </button>
       <button id="sekme-admin" class="nav-sekme" data-ekran="admin" style="display: none;">
         <span>⚙️</span> Yönetici Paneli
       </button>
@@ -177,7 +180,7 @@
           <form onsubmit="bakiyeYukleFormu(event)">
             <div class="form-grup">
               <label for="bakiye-yukle-tutar">Yükleme Tutarı (TL):</label>
-              <input type="number" id="bakiye-yukle-tutar" min="10" max="1000" step="0.5" required placeholder="10 – 1000 TL">
+              <input type="number" id="bakiye-yukle-tutar" step="any" required placeholder="10 – 1000 TL">
               <span class="form-ipucu">Tek seferde en az 10 TL, en fazla 1000 TL yükleyebilirsiniz.</span>
             </div>
             <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
@@ -296,6 +299,52 @@
         <div id="admin-menu-rapor-tablosu">
           <p class="bildirim bildirim-bilgi">Menü raporları yükleniyor...</p>
         </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================
+         8. EKRAN: PROFİL VE ALERJEN TERCİHLERİ
+         =================================================================== -->
+    <section id="ekran-profil" class="ekran">
+      <div class="kart" style="margin-bottom: 1.25rem;">
+        <div class="kart-baslik">
+          <h2>Kullanıcı Profili</h2>
+        </div>
+        <div class="profil-bilgi-izgara">
+          <div class="profil-bilgi-kart">
+            <div class="profil-bilgi-baslik">Ad Soyad</div>
+            <div id="profil-ad-soyad" class="profil-bilgi-deger">—</div>
+          </div>
+          <div class="profil-bilgi-kart">
+            <div class="profil-bilgi-baslik">E-posta</div>
+            <div id="profil-eposta" class="profil-bilgi-deger">—</div>
+          </div>
+          <div class="profil-bilgi-kart">
+            <div class="profil-bilgi-baslik">Kullanıcı Rolü</div>
+            <div id="profil-rol" class="profil-bilgi-deger">—</div>
+          </div>
+          <div class="profil-bilgi-kart">
+            <div class="profil-bilgi-baslik">Öğrenci Numarası</div>
+            <div id="profil-ogrenci-no" class="profil-bilgi-deger">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="kart">
+        <div class="kart-baslik">
+          <h2>Alerjen Tercihleri ve Uyarı Sistemi</h2>
+        </div>
+        <p class="form-ipucu">
+          Aşağıdaki listeden tüketmekten kaçındığınız veya hassasiyetinizin olduğu alerjenleri seçiniz.
+          Günün ve haftanın menülerinde, seçtiğiniz alerjenleri içeren tüm yemekler <strong>kırmızı uyarı rozetiyle</strong> belirginleştirilecektir.
+        </p>
+
+        <form onsubmit="profilAlerjenleriKaydet(event)">
+          <div id="profil-alerjen-listesi" class="alerjen-secim-izgara">
+            <p class="bildirim bildirim-bilgi">Alerjenler yükleniyor...</p>
+          </div>
+          <button type="submit" class="dugme dugme-ana" style="margin-top: 0.5rem;">Alerjen Tercihlerini Kaydet</button>
+        </form>
       </div>
     </section>
 

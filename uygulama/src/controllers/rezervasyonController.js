@@ -12,12 +12,18 @@ async function getRezervasyonlar(req, res) {
 
 async function rezervasyonYap(req, res) {
   try {
-    const { menu_id } = req.body;
+    const { menu_id, porsiyon } = req.body;
     if (!menu_id) {
       return res.status(400).json({ hata: 'Menü ID belirtilmelidir.' });
     }
 
-    const sonuc = await rezervasyonRepository.rezervasyonYap(req.user.id, menu_id);
+    const seciliPorsiyon = (porsiyon && String(porsiyon).trim().toLowerCase()) || 'tam';
+
+    const sonuc = await rezervasyonRepository.rezervasyonYap(
+      req.user.id,
+      menu_id,
+      seciliPorsiyon
+    );
     if (!sonuc) {
       return res.status(400).json({ hata: 'Rezervasyon oluşturulamadı.' });
     }
@@ -26,7 +32,8 @@ async function rezervasyonYap(req, res) {
       mesaj: 'Rezervasyon başarıyla oluşturuldu.',
       rezervasyon_id: sonuc.rezervasyon_id,
       ucret: sonuc.ucret,
-      bakiye: sonuc.bakiye
+      bakiye: sonuc.bakiye,
+      porsiyon: sonuc.porsiyon || seciliPorsiyon
     });
   } catch (err) {
     return handleDatabaseError(err, res);

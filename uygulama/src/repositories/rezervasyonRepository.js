@@ -1,8 +1,12 @@
 const { primaryPool, replicaPool } = require('../config/db');
 
 // sp_rezervasyon_yap - autocommit açıkken, BEGIN/COMMIT olmadan primary üzerinde çağrılır
-async function rezervasyonYap(kullaniciId, menuId) {
-  const [rows] = await primaryPool.query('CALL sp_rezervasyon_yap(?, ?)', [kullaniciId, menuId]);
+async function rezervasyonYap(kullaniciId, menuId, porsiyon = 'tam') {
+  const [rows] = await primaryPool.query('CALL sp_rezervasyon_yap(?, ?, ?)', [
+    kullaniciId,
+    menuId,
+    porsiyon
+  ]);
   // mysql2 stored procedure çağrılarında ilk sonuç kümesi rows[0]'dır
   const sonuc = rows[0] && rows[0][0] ? rows[0][0] : null;
   return sonuc;
@@ -19,7 +23,7 @@ async function rezervasyonIptal(kullaniciId, rezervasyonId) {
 async function getByKullaniciId(kullaniciId) {
   const query = `
     SELECT 
-      r.id, r.menu_id, r.durum, r.ucret, r.olusturma, r.kullanma_zamani, r.iptal_zamani,
+      r.id, r.menu_id, r.durum, r.porsiyon, r.ucret, r.olusturma, r.kullanma_zamani, r.iptal_zamani,
       m.tarih, yh.id AS yemekhane_id, yh.ad AS yemekhane,
       o.id AS ogun_id, o.ad AS ogun, o.sira AS ogun_sira,
       TIMESTAMP(m.tarih, o.son_saat) AS rezervasyon_son,
@@ -41,7 +45,7 @@ async function getByKullaniciId(kullaniciId) {
 async function getKullaniciRezervasyonDurumlari(kullaniciId, menuIds) {
   if (!menuIds || menuIds.length === 0) return [];
   const query = `
-    SELECT id AS rezervasyon_id, menu_id, durum
+    SELECT id AS rezervasyon_id, menu_id, durum, porsiyon
     FROM rezervasyonlar
     WHERE kullanici_id = ? AND menu_id IN (?)
   `;

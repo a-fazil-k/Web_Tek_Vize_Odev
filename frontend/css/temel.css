@@ -770,6 +770,176 @@ input:focus, select:focus, textarea:focus {
 }
 
 /* =====================================================================
+   AŞAMA 4: ALERJEN UYARILARI, PORSİYON VE PROFİL STİLLERİ
+   ===================================================================== */
+
+/* Menü Kartı Alerjen Uyarı Şeridi */
+.menu-alerjen-uyari-serit {
+  background: var(--hata-zemin);
+  color: var(--hata);
+  font-weight: 700;
+  font-size: var(--boyut-kucuk);
+  padding: 0.5rem var(--bosluk);
+  border-bottom: 1px solid rgba(197, 34, 31, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Alerjenli Yemek Öğesi Vurgusu */
+.yemek-ogesi-alerjenli {
+  background: #FFF5F5;
+  border-left: 3px solid var(--hata) !important;
+  padding-left: 0.5rem !important;
+  border-radius: 0 4px 4px 0;
+}
+
+.etiket-alerjen-tehlike {
+  background: var(--hata);
+  color: #FFFFFF;
+  border: 1px solid #A51A18;
+  font-weight: 700;
+  animation: pulseUyari 2s infinite ease-in-out;
+}
+
+@keyframes pulseUyari {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
+/* Porsiyon Seçici Bileşeni */
+.porsiyon-secim-kapsayici {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+.porsiyon-etiket {
+  font-size: 0.725rem;
+  font-weight: 700;
+  color: var(--metin-soluk);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.porsiyon-secici {
+  display: inline-flex;
+  background: var(--cizgi-acik);
+  border: 1px solid var(--cizgi);
+  border-radius: var(--kose);
+  padding: 2px;
+  gap: 2px;
+}
+.porsiyon-secenek {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin: 0;
+  font-size: var(--boyut-kucuk);
+  font-weight: 600;
+  border-radius: calc(var(--kose) - 2px);
+  padding: 0.3rem 0.65rem;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  user-select: none;
+  color: var(--metin-soluk);
+}
+.porsiyon-secenek input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+  pointer-events: none;
+}
+.porsiyon-secenek:has(input:checked) {
+  background: var(--yuzey);
+  color: var(--ana-koyu);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  font-weight: 700;
+}
+.porsiyon-kahvalti-not {
+  font-size: 0.75rem;
+  color: var(--metin-soluk);
+  font-style: italic;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+/* Rezervasyon Tablosu Porsiyon Rozetleri */
+.porsiyon-rozet {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.porsiyon-tam   { background: var(--ana-acik); color: var(--ana-koyu); }
+.porsiyon-yarim { background: var(--vurgu-acik); color: #B45309; }
+
+/* Profil ve Alerjen Tercihleri Ekranı Stilleri */
+.profil-bilgi-izgara {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+.profil-bilgi-kart {
+  background: var(--yuzey-alt);
+  border: 1px solid var(--cizgi-acik);
+  border-radius: var(--kose);
+  padding: 0.75rem 1rem;
+}
+.profil-bilgi-baslik {
+  font-size: 0.75rem;
+  color: var(--metin-soluk);
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+.profil-bilgi-deger {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--metin);
+}
+
+.alerjen-secim-izgara {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 0.65rem;
+  margin-block: 1rem;
+}
+.alerjen-kutu-etiket {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--yuzey-alt);
+  border: 1px solid var(--cizgi);
+  border-radius: var(--kose);
+  padding: 0.65rem 0.85rem;
+  cursor: pointer;
+  font-size: var(--boyut-orta);
+  transition: border-color 0.15s, background 0.15s;
+  user-select: none;
+}
+.alerjen-kutu-etiket:hover {
+  background: #FFFFFF;
+  border-color: var(--ana);
+}
+.alerjen-kutu-etiket input[type="checkbox"] {
+  width: 1.15rem;
+  height: 1.15rem;
+  cursor: pointer;
+  accent-color: var(--hata);
+  margin: 0;
+}
+.alerjen-kutu-etiket:has(input:checked) {
+  background: #FEF2F2;
+  border-color: #F87171;
+  color: #991B1B;
+  font-weight: 600;
+}
+
+/* =====================================================================
    400PX VE ALTI MOBİL UYUM (RESPONSIVE)
    ===================================================================== */
 @media (max-width: 480px) {
@@ -829,5 +999,19 @@ input:focus, select:focus, textarea:focus {
     right: 0.5rem;
     left: 0.5rem;
     width: auto;
+  }
+
+  .alerjen-secim-izgara {
+    grid-template-columns: 1fr;
+  }
+  .profil-bilgi-izgara {
+    grid-template-columns: 1fr;
+  }
+  .porsiyon-secici {
+    width: 100%;
+  }
+  .porsiyon-secenek {
+    flex: 1;
+    text-align: center;
   }
 }

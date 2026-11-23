@@ -1,6 +1,7 @@
 const yemekhaneRepository = require('../repositories/yemekhaneRepository');
 const menuRepository = require('../repositories/menuRepository');
 const rezervasyonRepository = require('../repositories/rezervasyonRepository');
+const alerjenRepository = require('../repositories/alerjenRepository');
 const { menuCacheGet, menuCacheSet } = require('../services/menuCacheService');
 
 // Tarih yardımcısı: YYYY-MM-DD
@@ -29,13 +30,25 @@ async function getVeBirlestirMenuler({ baslangic, bitis, yemekhane_id }, user = 
     return [];
   }
 
-  // 2. Kullanıcı oturum açmışsa rezervasyon durumlarını al
+  // 2. Kullanıcı oturum açmışsa rezervasyon durumlarını ve alerjen tercihlerini al
   const rezMap = new Map();
+  let kullaniciAlerjenIds = new Set();
   if (user) {
     const menuIds = menulerDoluluk.map(m => m.menu_id);
     if (menuIds.length > 0) {
       const userRezList = await rezervasyonRepository.getKullaniciRezervasyonDurumlari(user.id, menuIds);
-      userRezList.forEach(r => rezMap.set(r.menu_id, { rezervasyon_id: r.rezervasyon_id, durum: r.durum }));
+      userRezList.forEach(r => rezMap.set(r.menu_id, {
+        rezervasyon_id: r.rezervasyon_id,
+        durum: r.durum,
+        porsiyon: r.porsiyon
+      }));
+    }
+
+    try {
+      const aIds = await alerjenRepository.getKullaniciAlerjenIdleri(user.id);
+      kullaniciAlerjenIds = new Set(aIds);
+    } catch (aErr) {
+      console.error('Kullanıcı alerjenleri okuma hatası:', aErr.message);
     }
   }
 
@@ -51,24 +64,39 @@ async function getVeBirlestirMenuler({ baslangic, bitis, yemekhane_id }, user = 
     if (!menuIcerik) {
       const yemekRows = await menuRepository.findMenuById(m.menu_id);
       if (yemekRows && yemekRows.length > 0) {
-        const yemekler = yemekRows.map(y => ({
-          id: y.yemek_id,
-          yemek_id: y.yemek_id,
-          ad: y.yemek,
-          kategori_id: y.kategori_id,
-          kategori: y.kategori,
-          kategori_sira: y.kategori_sira,
-          kalori: Number(y.kalori) || 0,
-          vejetaryen: Boolean(y.vejetaryen),
-          alerjenler: y.alerjenler ? y.alerjenler.split(', ') : [],
-          alerjen_idler: y.alerjen_idler ? y.alerjen_idler.split(',').map(Number) : []
-        }));
+        const yemekler = yemekRows.map(y => {
+          const alerjenler = y.alerjenler ? y.alerjenler.split(', ').map(s => s.trim()).filter(Boolean) : [];
+          const alerjen_idler = y.alerjen_idler ? y.alerjen_idler.split(',').map(n => parseInt(n.trim(), 10)).filter(n => !isNaN(n)) : [];
+          return {
+            id: y.yemek_id,
+            yemek_id: y.yemek_id,
+            ad: y.yemek,
+            kategori_id: y.kategori_id,
+            kategori: y.kategori,
+            kategori_sira: y.kategori_sira,
+            kalori: Number(y.kalori) || 0,
+            vejetaryen: Boolean(y.vejetaryen),
+            alerjenler,
+            alerjen_idler
+          };
+        });
 
         const toplamKalori = yemekler.reduce((sum, y) => sum + y.kalori, 0);
+        const ogrenciFiyati = yemekRows[0].ogrenci_fiyati;
+        const personelFiyati = yemekRows[0].personel_fiyati;
+
+        // Kahvaltıda yarım porsiyon izni verilmez
+        const yarimPorsiyonIzinli = m.ogun !== 'Kahvaltı' && m.ogun_id !== 1;
+        const yarimOgrenciFiyati = (parseFloat(ogrenciFiyati) * 0.60).toFixed(2);
+        const yarimPersonelFiyati = (parseFloat(personelFiyati) * 0.60).toFixed(2);
 
         menuIcerik = {
-          ogrenci_fiyati: yemekRows[0].ogrenci_fiyati,
-          personel_fiyati: yemekRows[0].personel_fiyati,
+          v: 2,
+          ogrenci_fiyati: ogrenciFiyati,
+          personel_fiyati: personelFiyati,
+          yarim_porsiyon_izinli: yarimPorsiyonIzinli,
+          yarim_ogrenci_fiyati: yarimOgrenciFiyati,
+          yarim_personel_fiyati: yarimPersonelFiyati,
           yemekler,
           toplam_kalori: toplamKalori
         };
@@ -78,8 +106,12 @@ async function getVeBirlestirMenuler({ baslangic, bitis, yemekhane_id }, user = 
       } else {
         // Yemek kaydı yoksa boş içerik
         menuIcerik = {
+          v: 2,
           ogrenci_fiyati: "0.00",
           personel_fiyati: "0.00",
+          yarim_porsiyon_izinli: m.ogun !== 'Kahvaltı' && m.ogun_id !== 1,
+          yarim_ogrenci_fiyati: "0.00",
+          yarim_personel_fiyati: "0.00",
           yemekler: [],
           toplam_kalori: 0
         };
@@ -92,9 +124,34 @@ async function getVeBirlestirMenuler({ baslangic, bitis, yemekhane_id }, user = 
 
     // Rolüne göre fiyat
     let gecerliFiyat = menuIcerik.ogrenci_fiyati;
+    let gecerliYarimFiyat = menuIcerik.yarim_ogrenci_fiyati;
     if (user) {
       gecerliFiyat = user.rol === 'ogrenci' ? menuIcerik.ogrenci_fiyati : menuIcerik.personel_fiyati;
+      gecerliYarimFiyat = user.rol === 'ogrenci' ? menuIcerik.yarim_ogrenci_fiyati : menuIcerik.yarim_personel_fiyati;
     }
+
+    // Kullanıcı alerjen tercihlerine göre uyarı eşleştirmesi
+    let menuAlerjenUyarisi = false;
+    const kullaniciYemekleri = (menuIcerik.yemekler || []).map(y => {
+      const eslesenler = [];
+      if (kullaniciAlerjenIds.size > 0 && Array.isArray(y.alerjen_idler)) {
+        for (let i = 0; i < y.alerjen_idler.length; i++) {
+          const aId = y.alerjen_idler[i];
+          if (kullaniciAlerjenIds.has(aId)) {
+            eslesenler.push(y.alerjenler[i] || `Alerjen ${aId}`);
+          }
+        }
+      }
+      const alerjenUyarisi = eslesenler.length > 0;
+      if (alerjenUyarisi) {
+        menuAlerjenUyarisi = true;
+      }
+      return {
+        ...y,
+        alerjen_uyarisi: alerjenUyarisi,
+        eslesen_alerjenler: eslesenler
+      };
+    });
 
     const userRez = rezMap.get(m.menu_id) || null;
 
@@ -110,7 +167,11 @@ async function getVeBirlestirMenuler({ baslangic, bitis, yemekhane_id }, user = 
       son_saat_gecti: sonSaatGecti,
       ogrenci_fiyati: menuIcerik.ogrenci_fiyati,
       personel_fiyati: menuIcerik.personel_fiyati,
+      yarim_porsiyon_izinli: menuIcerik.yarim_porsiyon_izinli,
+      yarim_ogrenci_fiyati: menuIcerik.yarim_ogrenci_fiyati,
+      yarim_personel_fiyati: menuIcerik.yarim_personel_fiyati,
       fiyat: gecerliFiyat,
+      yarim_fiyat: gecerliYarimFiyat,
       kapasite: m.kapasite,
       rezerve: m.rezerve,
       bos_yer: m.bos_yer,
@@ -118,7 +179,8 @@ async function getVeBirlestirMenuler({ baslangic, bitis, yemekhane_id }, user = 
       oy_sayisi: m.oy_sayisi || 0,
       ortalama_puan: m.ortalama_puan !== null ? Number(m.ortalama_puan) : null,
       kullanici_rezervasyonu: userRez,
-      yemekler: menuIcerik.yemekler,
+      menu_alerjen_uyarisi: menuAlerjenUyarisi,
+      yemekler: kullaniciYemekleri,
       toplam_kalori: menuIcerik.toplam_kalori
     });
   }

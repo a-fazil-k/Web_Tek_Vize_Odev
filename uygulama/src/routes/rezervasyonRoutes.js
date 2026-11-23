@@ -8,5 +8,6 @@ router.use(oturumZorunlu);
 router.get('/', rezervasyonController.getRezervasyonlar);
 router.post('/', rezervasyonController.rezervasyonYap);
 router.delete('/:id', rezervasyonController.rezervasyonIptal);
+router.post('/:id/iptal', rezervasyonController.rezervasyonIptal);
 
 module.exports = router;

@@ -38,8 +38,15 @@ async function menuCacheGet(yemekhaneId, tarih, ogunId) {
     const raw = await redis.get(key);
     if (!raw) return null;
 
+    const parsed = JSON.parse(raw);
+    // Aşama 4 şema kontrolü: v: 2 ve yarim_porsiyon_izinli alanı zorunludur
+    if (!parsed || parsed.v !== 2 || parsed.yarim_porsiyon_izinli === undefined) {
+      console.log(`[REDIS CACHE SCHEMA MISS] ${key} -> Eski şema versiyonu tespit edildi, taze veri okunacak`);
+      return null;
+    }
+
     console.log(`[REDIS CACHE HIT] ${key} -> Redis onbelleginden sunuldu`);
-    return JSON.parse(raw);
+    return parsed;
   } catch (err) {
     console.error(`[REDIS CACHE HATA] ${key} okunamadi:`, err.message);
     return null;
@@ -57,6 +64,10 @@ async function menuCacheSet(yemekhaneId, tarih, ogunId, menuIcerik) {
   }
 
   try {
+    // Şema versiyonunu garanti et
+    if (!menuIcerik.v) {
+      menuIcerik.v = 2;
+    }
     await redis.set(key, JSON.stringify(menuIcerik), 'EX', ttl);
     console.log(`[REDIS CACHE MISS] ${key} -> MySQL replikadan okundu ve Redis'e yazildi (TTL: ${ttl}s)`);
     return true;
