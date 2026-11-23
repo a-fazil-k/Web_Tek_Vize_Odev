@@ -56,6 +56,47 @@ async function findMenuById(menuId) {
   return rows;
 }
 
+// Menülerin canlı doluluk ve puan bilgilerini getirir (v_menu_doluluk + v_menu_puan)
+async function getMenulerDolulukVePuan({ baslangic, bitis, yemekhane_id } = {}) {
+  let query = `
+    SELECT 
+      dol.menu_id, dol.tarih, dol.yemekhane_id, dol.yemekhane, dol.ogun_id, dol.ogun,
+      dol.kapasite, dol.rezerve, dol.bos_yer, dol.doluluk_yuzde, dol.rezervasyon_son,
+      p.oy_sayisi, p.ortalama_puan
+    FROM v_menu_doluluk dol
+    LEFT JOIN v_menu_puan p ON p.menu_id = dol.menu_id
+    WHERE 1=1
+  `;
+  const params = [];
+
+  if (baslangic && bitis) {
+    query += ' AND dol.tarih BETWEEN ? AND ?';
+    params.push(baslangic, bitis);
+  } else if (baslangic) {
+    query += ' AND dol.tarih = ?';
+    params.push(baslangic);
+  }
+
+  if (yemekhane_id) {
+    query += ' AND dol.yemekhane_id = ?';
+    params.push(yemekhane_id);
+  }
+
+  query += ' ORDER BY dol.tarih ASC, dol.ogun_id ASC';
+
+  const [rows] = await replicaPool.query(query, params);
+  return rows;
+}
+
+// Menü ana kaydını çeker (eski anahtar tespiti vb. için)
+async function findMenuBaslikById(menuId) {
+  const [rows] = await replicaPool.query(
+    'SELECT id, yemekhane_id, DATE_FORMAT(tarih, "%Y-%m-%d") AS tarih, ogun_id, ogrenci_fiyati, personel_fiyati FROM menuler WHERE id = ?',
+    [menuId]
+  );
+  return rows[0] || null;
+}
+
 // Yönetici menü listesi
 async function getAdminMenuler({ baslangic, bitis, yemekhane_id } = {}) {
   let query = `
@@ -224,6 +265,8 @@ async function updateMenu(id, { yemekhane_id, tarih, ogun_id, ogrenci_fiyati, pe
 module.exports = {
   getMenuDetayRows,
   findMenuById,
+  getMenulerDolulukVePuan,
+  findMenuBaslikById,
   getAdminMenuler,
   getMenuYemekleri,
   getAdminYemekler,

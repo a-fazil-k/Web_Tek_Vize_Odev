@@ -1,6 +1,7 @@
 const yemekhaneRepository = require('../repositories/yemekhaneRepository');
 const menuRepository = require('../repositories/menuRepository');
 const rezervasyonRepository = require('../repositories/rezervasyonRepository');
+const { menuCacheGet, menuCacheSet } = require('../services/menuCacheService');
 
 // Tarih yardımcısı: YYYY-MM-DD
 function getBugunISO() {
@@ -11,71 +12,118 @@ function getBugunISO() {
   return `${year}-${month}-${day}`;
 }
 
-// Menü satırlarını gruplayıp toplam kalori ve iş kurallarını hesaplayan yardımcı
-function formatMenuler(rows, user = null, userReservations = []) {
+/**
+ * Menüleri önbellek (Redis) + canlı doluluk (MySQL) birleştirerek getirir.
+ * - Menü içeriği (yemekler, kalori, fiyatlar) Redis'ten gelir (CACHE HIT / MISS).
+ * - Canlı kapasite, doluluk, oy ve kullanıcının rezervasyon durumu anlık olarak tazedir.
+ */
+async function getVeBirlestirMenuler({ baslangic, bitis, yemekhane_id }, user = null) {
+  // 1. İstenen tarih/aralık için temel menü doluluk ve puan kayıtlarını çek (hafif sorgu)
+  const menulerDoluluk = await menuRepository.getMenulerDolulukVePuan({
+    baslangic,
+    bitis,
+    yemekhane_id
+  });
+
+  if (!menulerDoluluk || menulerDoluluk.length === 0) {
+    return [];
+  }
+
+  // 2. Kullanıcı oturum açmışsa rezervasyon durumlarını al
   const rezMap = new Map();
-  userReservations.forEach(r => rezMap.set(r.menu_id, { rezervasyon_id: r.rezervasyon_id, durum: r.durum }));
-
-  const menuMap = new Map();
-  const now = new Date();
-
-  for (const row of rows) {
-    if (!menuMap.has(row.menu_id)) {
-      const rezervasyonSon = new Date(row.rezervasyon_son);
-      const sonSaatGecti = now >= rezervasyonSon;
-
-      let gecerliFiyat = row.ogrenci_fiyati;
-      if (user) {
-        gecerliFiyat = user.rol === 'ogrenci' ? row.ogrenci_fiyati : row.personel_fiyati;
-      }
-
-      const userRez = rezMap.get(row.menu_id) || null;
-
-      menuMap.set(row.menu_id, {
-        id: row.menu_id,
-        menu_id: row.menu_id,
-        tarih: row.tarih,
-        yemekhane_id: row.yemekhane_id,
-        yemekhane: row.yemekhane,
-        ogun_id: row.ogun_id,
-        ogun: row.ogun,
-        ogun_sira: row.ogun_sira,
-        rezervasyon_son: row.rezervasyon_son,
-        son_saat_gecti: sonSaatGecti,
-        ogrenci_fiyati: row.ogrenci_fiyati,
-        personel_fiyati: row.personel_fiyati,
-        fiyat: gecerliFiyat,
-        kapasite: row.kapasite,
-        rezerve: row.rezerve,
-        bos_yer: row.bos_yer,
-        doluluk_yuzde: row.doluluk_yuzde,
-        oy_sayisi: row.oy_sayisi || 0,
-        ortalama_puan: row.ortalama_puan !== null ? Number(row.ortalama_puan) : null,
-        kullanici_rezervasyonu: userRez,
-        yemekler: [],
-        toplam_kalori: 0
-      });
-    }
-
-    const menu = menuMap.get(row.menu_id);
-    if (row.yemek_id) {
-      menu.yemekler.push({
-        id: row.yemek_id,
-        yemek_id: row.yemek_id,
-        ad: row.yemek,
-        kategori_id: row.kategori_id,
-        kategori: row.kategori,
-        kategori_sira: row.kategori_sira,
-        kalori: Number(row.kalori) || 0,
-        vejetaryen: Boolean(row.vejetaryen),
-        alerjenler: row.alerjenler ? row.alerjenler.split(', ') : [],
-        alerjen_idler: row.alerjen_idler ? row.alerjen_idler.split(',').map(Number) : []
-      });
-      menu.toplam_kalori += Number(row.kalori) || 0;
+  if (user) {
+    const menuIds = menulerDoluluk.map(m => m.menu_id);
+    if (menuIds.length > 0) {
+      const userRezList = await rezervasyonRepository.getKullaniciRezervasyonDurumlari(user.id, menuIds);
+      userRezList.forEach(r => rezMap.set(r.menu_id, { rezervasyon_id: r.rezervasyon_id, durum: r.durum }));
     }
   }
 
-  return Array.from(menuMap.values());
+  const now = new Date();
+  const sonucMenuler = [];
+
+  // 3. Her menü için Redis kontrolü yap
+  for (const m of menulerDoluluk) {
+    // Redis'ten kontrol et
+    let menuIcerik = await menuCacheGet(m.yemekhane_id, m.tarih, m.ogun_id);
+
+    // CACHE MISS: MySQL'den oku ve Redis'e yaz
+    if (!menuIcerik) {
+      const yemekRows = await menuRepository.findMenuById(m.menu_id);
+      if (yemekRows && yemekRows.length > 0) {
+        const yemekler = yemekRows.map(y => ({
+          id: y.yemek_id,
+          yemek_id: y.yemek_id,
+          ad: y.yemek,
+          kategori_id: y.kategori_id,
+          kategori: y.kategori,
+          kategori_sira: y.kategori_sira,
+          kalori: Number(y.kalori) || 0,
+          vejetaryen: Boolean(y.vejetaryen),
+          alerjenler: y.alerjenler ? y.alerjenler.split(', ') : [],
+          alerjen_idler: y.alerjen_idler ? y.alerjen_idler.split(',').map(Number) : []
+        }));
+
+        const toplamKalori = yemekler.reduce((sum, y) => sum + y.kalori, 0);
+
+        menuIcerik = {
+          ogrenci_fiyati: yemekRows[0].ogrenci_fiyati,
+          personel_fiyati: yemekRows[0].personel_fiyati,
+          yemekler,
+          toplam_kalori: toplamKalori
+        };
+
+        // Redis'e gün sonu TTL ile yaz
+        await menuCacheSet(m.yemekhane_id, m.tarih, m.ogun_id, menuIcerik);
+      } else {
+        // Yemek kaydı yoksa boş içerik
+        menuIcerik = {
+          ogrenci_fiyati: "0.00",
+          personel_fiyati: "0.00",
+          yemekler: [],
+          toplam_kalori: 0
+        };
+      }
+    }
+
+    // Süre kontrolü
+    const rezervasyonSon = new Date(m.rezervasyon_son);
+    const sonSaatGecti = now >= rezervasyonSon;
+
+    // Rolüne göre fiyat
+    let gecerliFiyat = menuIcerik.ogrenci_fiyati;
+    if (user) {
+      gecerliFiyat = user.rol === 'ogrenci' ? menuIcerik.ogrenci_fiyati : menuIcerik.personel_fiyati;
+    }
+
+    const userRez = rezMap.get(m.menu_id) || null;
+
+    sonucMenuler.push({
+      id: m.menu_id,
+      menu_id: m.menu_id,
+      tarih: m.tarih,
+      yemekhane_id: m.yemekhane_id,
+      yemekhane: m.yemekhane,
+      ogun_id: m.ogun_id,
+      ogun: m.ogun,
+      rezervasyon_son: m.rezervasyon_son,
+      son_saat_gecti: sonSaatGecti,
+      ogrenci_fiyati: menuIcerik.ogrenci_fiyati,
+      personel_fiyati: menuIcerik.personel_fiyati,
+      fiyat: gecerliFiyat,
+      kapasite: m.kapasite,
+      rezerve: m.rezerve,
+      bos_yer: m.bos_yer,
+      doluluk_yuzde: m.doluluk_yuzde,
+      oy_sayisi: m.oy_sayisi || 0,
+      ortalama_puan: m.ortalama_puan !== null ? Number(m.ortalama_puan) : null,
+      kullanici_rezervasyonu: userRez,
+      yemekler: menuIcerik.yemekler,
+      toplam_kalori: menuIcerik.toplam_kalori
+    });
+  }
+
+  return sonucMenuler;
 }
 
 async function getYemekhaneler(req, res) {
@@ -103,21 +151,11 @@ async function getGunlukMenuler(req, res) {
     const tarih = req.query.tarih || getBugunISO();
     const yemekhane_id = req.query.yemekhane_id ? parseInt(req.query.yemekhane_id, 10) : null;
 
-    const rows = await menuRepository.getMenuDetayRows({
-      baslangic: tarih,
-      bitis: null,
-      yemekhane_id
-    });
+    const menuler = await getVeBirlestirMenuler(
+      { baslangic: tarih, bitis: null, yemekhane_id },
+      req.user
+    );
 
-    let userRez = [];
-    if (req.user) {
-      const menuIds = [...new Set(rows.map(r => r.menu_id))];
-      if (menuIds.length > 0) {
-        userRez = await rezervasyonRepository.getKullaniciRezervasyonDurumlari(req.user.id, menuIds);
-      }
-    }
-
-    const menuler = formatMenuler(rows, req.user, userRez);
     return res.json(menuler);
   } catch (err) {
     console.error('Günlük menü getirme hatası:', err);
@@ -140,21 +178,11 @@ async function getHaftalikMenuler(req, res) {
 
     const yemekhane_id = req.query.yemekhane_id ? parseInt(req.query.yemekhane_id, 10) : null;
 
-    const rows = await menuRepository.getMenuDetayRows({
-      baslangic,
-      bitis,
-      yemekhane_id
-    });
+    const menuler = await getVeBirlestirMenuler(
+      { baslangic, bitis, yemekhane_id },
+      req.user
+    );
 
-    let userRez = [];
-    if (req.user) {
-      const menuIds = [...new Set(rows.map(r => r.menu_id))];
-      if (menuIds.length > 0) {
-        userRez = await rezervasyonRepository.getKullaniciRezervasyonDurumlari(req.user.id, menuIds);
-      }
-    }
-
-    const menuler = formatMenuler(rows, req.user, userRez);
     return res.json(menuler);
   } catch (err) {
     console.error('Haftalık menü getirme hatası:', err);

@@ -23,7 +23,7 @@ async function giris(req, res) {
       return res.status(401).json({ hata: 'E-posta veya şifre hatalı.' });
     }
 
-    const oturumId = oturumOlustur(kullanici);
+    const oturumId = await oturumOlustur(kullanici);
 
     res.cookie('oturum_id', oturumId, {
       httpOnly: true,
@@ -53,7 +53,7 @@ async function giris(req, res) {
 async function cikis(req, res) {
   try {
     const oturumId = req.cookies?.oturum_id;
-    oturumSil(oturumId);
+    await oturumSil(oturumId);
     res.clearCookie('oturum_id', { path: '/' });
     return res.json({ mesaj: 'Çıkış yapıldı.' });
   } catch (err) {

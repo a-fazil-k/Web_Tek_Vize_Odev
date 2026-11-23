@@ -1,5 +1,6 @@
 const express = require('express');
 const cookieParser = require('cookie-parser');
+require('./config/redis');
 const apiRoutes = require('./routes/index');
 
 const app = express();

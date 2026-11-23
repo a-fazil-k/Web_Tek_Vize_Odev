@@ -1,0 +1,46 @@
+=== 0. TEMIZ REDIS BASLANGICI ===
+OK
+
+=== 1. GIRIS VE REDIS OTURUM KONTROLU ===
+{"mesaj":"Giriş başarılı.","kullanici":{"id":1,"ad":"Leyla","soyad":"Arslan","eposta":"leyla.arslan@kampus.edu.tr","rol":"yonetici","ogrenci_no":null,"bakiye":"410.00"}}
+Oturum Anahtari: oturum:e0e3098a-90f6-40f7-a0e2-da3aad8841df
+Ilk TTL (sn): 1800
+4 sn sonra TTL: 1796
+Istek sonrasi yenilenen TTL: 1800
+
+=== 2. CONTAINER RESTART SONRASI OTURUM KALICILIGI ===
+Restart sonrasi GET /api/auth/ben:
+{"id":1,"ad":"Leyla","soyad":"Arslan","eposta":"leyla.arslan@kampus.edu.tr","rol":"yonetici","ogrenci_no":null,"bakiye":"410.00"}
+
+=== 3. MENU ONBELLEK (1. ISTEK MISS -> 2. ISTEK HIT) ===
+Hedef menu_id=43 | Redis key=menu:1:2026-11-23:1 | eski ogrenci_fiyati=25.00
+Redis menu anahtarlari:
+menu:1:2026-11-23:2
+menu:1:2026-11-23:3
+menu:1:2026-11-23:1
+TTL menu:1:2026-11-23:1 -> 24012 sn
+
+=== 4. YONETICI MENU GUNCELLEME -> CACHE INVALIDATE ===
+{"mesaj":"Menü başarıyla güncellendi."}
+Guncelleme sonrasi EXISTS menu:1:2026-11-23:1 (0 olmali): 0
+Guncelleme sonrasi 3. GET isteginde yeni ogrenci_fiyati:
+menu_id: 43 | yeni ogrenci_fiyati: 99.00
+
+=== 5. CIKIS VE OTURUM SILINMESI ===
+{"mesaj":"Çıkış yapıldı."}
+Cikis sonrasi Redis oturum anahtarlari (bos olmali):
+
+
+=== 6. UYGULAMA LOGLARI (MISS / HIT / INVALIDATE) ===
+uygulama-1  | [REDIS] Redis baglantisi basariyla hazir ve dogrulandi.
+uygulama-1  | [REDIS CACHE MISS] menu:1:2026-11-23:1 -> MySQL replikadan okundu ve Redis'e yazildi (TTL: 24012s)
+uygulama-1  | [REDIS CACHE MISS] menu:1:2026-11-23:2 -> MySQL replikadan okundu ve Redis'e yazildi (TTL: 24012s)
+uygulama-1  | [REDIS CACHE MISS] menu:1:2026-11-23:3 -> MySQL replikadan okundu ve Redis'e yazildi (TTL: 24012s)
+uygulama-1  | [REDIS CACHE HIT] menu:1:2026-11-23:1 -> Redis onbelleginden sunuldu
+uygulama-1  | [REDIS CACHE HIT] menu:1:2026-11-23:2 -> Redis onbelleginden sunuldu
+uygulama-1  | [REDIS CACHE HIT] menu:1:2026-11-23:3 -> Redis onbelleginden sunuldu
+uygulama-1  | [REDIS CACHE INVALIDATE] menu:1:2026-11-23:1 -> Yonetici guncellemesi nedeniyle silindi
+uygulama-1  | [REDIS CACHE MISS] menu:1:2026-11-23:1 -> MySQL replikadan okundu ve Redis'e yazildi (TTL: 24011s)
+uygulama-1  | [REDIS CACHE HIT] menu:1:2026-11-23:2 -> Redis onbelleginden sunuldu
+uygulama-1  | [REDIS CACHE HIT] menu:1:2026-11-23:3 -> Redis onbelleginden sunuldu
+uygulama-1  | [REDIS CACHE INVALIDATE] menu:1:2026-11-23:1 -> Yonetici guncellemesi nedeniyle silindi
